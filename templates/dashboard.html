@@ -1,0 +1,150 @@
+{% extends "layout.html" %}
+
+{% block title %}Rate Limit Dashboard{% endblock %}
+
+{% block main %}
+<div class="container mt-5">
+    <h1>API Rate Limit Dashboard</h1>
+    <p class="text-muted">Monitor your API request limits and usage patterns</p>
+    
+    <hr>
+    
+    <!-- Rate Limit Configuration Cards -->
+    <h2 class="mt-5">Current Limits</h2>
+    <div class="row mb-4">
+        <div class="col-md-4">
+            <div class="card border-primary">
+                <div class="card-body">
+                    <h5 class="card-title">Subscription Tier</h5>
+                    <p class="card-text">
+                        <span class="badge bg-info" style="font-size: 1rem;">{{ config.tier|upper }}</span>
+                    </p>
+                    <small class="text-muted">{% if config.tier == 'premium' %}Premium tier unlocked{% else %}Upgrade to Premium for higher limits{% endif %}</small>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="card border-success">
+                <div class="card-body">
+                    <h5 class="card-title">Per-Minute Limit</h5>
+                    <p class="card-text">
+                        <strong style="font-size: 1.5rem;">{{ config.requests_per_minute }}</strong>
+                        <span class="text-muted"> requests/min</span>
+                    </p>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="card border-warning">
+                <div class="card-body">
+                    <h5 class="card-title">Per-Hour Limit</h5>
+                    <p class="card-text">
+                        <strong style="font-size: 1.5rem;">{{ config.requests_per_hour }}</strong>
+                        <span class="text-muted"> requests/hr</span>
+                    </p>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <hr>
+    
+    <!-- Usage and Violation Tables -->
+    <div class="row">
+        <!-- Recent Usage -->
+        <div class="col-md-6">
+            <h3>Recent Usage <small class="text-muted">(Last 24 hours)</small></h3>
+            {% if usage %}
+            <div class="table-responsive">
+                <table class="table table-sm table-hover">
+                    <thead class="table-light">
+                        <tr>
+                            <th>Endpoint</th>
+                            <th>Time Window</th>
+                            <th>Requests</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                    {% for log in usage %}
+                        <tr>
+                            <td>
+                                <code>{{ log.endpoint }}</code>
+                            </td>
+                            <td>
+                                <small class="text-muted">{{ log.hour }}</small>
+                            </td>
+                            <td>
+                                <span class="badge bg-secondary">{{ log.count }}</span>
+                            </td>
+                        </tr>
+                    {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% else %}
+            <div class="alert alert-info" role="alert">
+                <small>No usage recorded in the last 24 hours</small>
+            </div>
+            {% endif %}
+        </div>
+        
+        <!-- Rate Limit Violations -->
+        <div class="col-md-6">
+            <h3>Violations <small class="text-muted">(Last 7 days)</small></h3>
+            {% if violations %}
+            <div class="table-responsive">
+                <table class="table table-sm table-hover">
+                    <thead class="table-light">
+                        <tr>
+                            <th>Endpoint</th>
+                            <th>Violations</th>
+                            <th>Latest</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                    {% for v in violations %}
+                        <tr class="table-danger">
+                            <td>
+                                <code>{{ v.endpoint }}</code>
+                            </td>
+                            <td>
+                                <span class="badge bg-danger">{{ v.violations }}</span>
+                            </td>
+                            <td>
+                                <small class="text-muted">{{ v.latest }}</small>
+                            </td>
+                        </tr>
+                    {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% else %}
+            <div class="alert alert-success" role="alert">
+                <small>✓ No violations detected</small>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+    
+    <hr>
+    
+    <!-- Rate Limiting Info -->
+    <div class="alert alert-info" role="alert">
+        <h5>How Rate Limiting Works</h5>
+        <ul class="mb-0" style="font-size: 0.9rem;">
+            <li><strong>Free Tier:</strong> 10 requests per minute, 100 per hour — suitable for light usage</li>
+            <li><strong>Premium Tier:</strong> 100 requests per minute, 10,000 per hour — for heavy workloads</li>
+            <li><strong>Rate Reset:</strong> Limits reset on a rolling window basis</li>
+            <li><strong>Status 429:</strong> If you exceed limits, requests will be rejected with HTTP 429 (Too Many Requests)</li>
+        </ul>
+    </div>
+    
+    <!-- Links -->
+    <div class="mt-4">
+        <a href="/" class="btn btn-secondary">← Back to Home</a>
+        {% if config.tier != 'premium' %}
+        <button class="btn btn-primary" disabled title="Upgrade feature coming soon">Upgrade to Premium</button>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}
