@@ -1,327 +1,225 @@
 import os
-from cs50 import SQL
-from flask import Flask, flash, redirect, render_template, request, session
+from flask import Flask, render_template, redirect, request, session, flash, jsonify
 from flask_session import Session
-from werkzeug.security import check_password_hash, generate_password_hash
-
-from helpers import apology, login_required
+from cs50 import SQL
+from helpers import apology, login_required, track_event, should_send_notification
+from email_service import EmailService
+from tasks import (
+    send_join_notification,
+    send_expense_notification,
+    send_settlement_notification,
+)
 
 # Configure application
 app = Flask(__name__)
 
-# Ensure templates are auto-reloaded
-app.config["TEMPLATES_AUTO_RELOAD"] = True
+# Feature flag for email notifications
+ENABLE_EMAIL_NOTIFICATIONS = (
+    os.getenv("ENABLE_EMAIL_NOTIFICATIONS", "false").lower() == "true"
+)
 
-# Configure session to use filesystem (instead of signed cookies)
+# Configure session
 app.config["SESSION_PERMANENT"] = False
 app.config["SESSION_TYPE"] = "filesystem"
 Session(app)
 
 # Configure CS50 Library to use SQLite database
-db = SQL("sqlite:///billbuddy.db")
+db = SQL("sqlite:///bill_splitter.db")
 
-
-@app.after_request
-def after_request(response):
-    """Ensure responses aren't cached"""
-    response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
-    response.headers["Expires"] = 0
-    response.headers["Pragma"] = "no-cache"
-    return response
+# Initialize email service (for health checks, not direct sending)
+email_service = EmailService()
 
 
 @app.route("/")
-@login_required
 def index():
-    return render_template("index.html")
-
-
-@app.route("/login", methods=["GET", "POST"])
-def login():
-    """Log user in"""
-
-    # Forget any user_id
-    session.clear()
-
-    # User reached route via POST (as by submitting a form via POST)
-    if request.method == "POST":
-        # Ensure username was submitted
-        if not request.form.get("username"):
-            return apology("must provide username", 403)
-
-        # Ensure password was submitted
-        elif not request.form.get("password"):
-            return apology("must provide password", 403)
-
-        # Query database for username
-        rows = db.execute(
-            "SELECT * FROM users WHERE username = ?", request.form.get("username")
-        )
-
-        # Ensure username exists and password is correct
-        if len(rows) != 1 or not check_password_hash(
-            rows[0]["hash"], request.form.get("password")
-        ):
-            return apology("invalid username and/or password", 403)
-
-        # Remember which user has logged in
-        session["user_id"] = rows[0]["user_id"]
-
-        # Redirect user to home page
-        return redirect("/")
-
-    # User reached route via GET (as by clicking a link or via redirect)
-    else:
-        return render_template("login.html")
-
-
-@app.route("/logout")
-def logout():
-    """Log user out"""
-
-    # Forget any user_id
-    session.clear()
-
-    # Redirect user to login form
-    return redirect("/")
+    """Display dashboard or redirect to login."""
+    # TODO: Implement index route
+    # If user logged in: show list of groups
+    # Otherwise: show login page or welcome message
+    pass
 
 
 @app.route("/register", methods=["GET", "POST"])
 def register():
-    if request.method == "GET":
-        return render_template("register.html")
-    else:
-        username = request.form.get("username")
-        password = request.form.get("password")
-        vpassword = request.form.get("confirmation")
-
-        if username == "" or password == "":
-            return apology("Username and/or Password is missing!")
-
-        if password != vpassword:
-            return apology("Password verification failed!")
-
-        entries = db.execute("SELECT * FROM users")
-        for entry in entries:
-            if entry["username"] == username:
-                return apology("Username already exists!")
-
-        hashed_password = generate_password_hash(password)
-        db.execute(
-            "INSERT INTO users (username, hash) VALUES (:u, :h)",
-            u=username,
-            h=hashed_password,
-        )
-        rows = db.execute("SELECT * FROM users WHERE username = ?", username)
-        session["user_id"] = rows[0]["user_id"]
-
-    return redirect("/")
+    """Register user."""
+    # TODO: Implement user registration
+    # GET: Render registration form
+    # POST:
+    #   - Get username, email, password from form
+    #   - Validate inputs (not empty, email format)
+    #   - Check if username already exists
+    #   - Hash password
+    #   - INSERT into users table with email field
+    #   - If ENABLE_EMAIL_NOTIFICATIONS:
+    #     - Create default user_preferences row
+    #     - Optionally: queue email verification task (future)
+    #   - Log event: track_event('user.registered', {'user_id': new_user_id})
+    #   - Redirect to login
+    pass
 
 
+@app.route("/login", methods=["GET", "POST"])
+def login():
+    """Log user in."""
+    # TODO: Implement user login
+    # GET: Render login form
+    # POST:
+    #   - Get username, password from form
+    #   - Query users table
+    #   - Verify password
+    #   - Set session["user_id"]
+    #   - Redirect to index or groups page
+    pass
+
+
+@app.route("/logout")
+def logout():
+    """Log user out."""
+    # TODO: Implement user logout
+    # Clear session["user_id"] and session["group_id"]
+    # Redirect to login
+    pass
 
 
 @app.route("/create", methods=["GET", "POST"])
 @login_required
 def create():
-    if request.method == "GET":
-        return render_template("create.html")
-    else:
-        group_name = request.form.get("group_name")
-        password = request.form.get("password")
-        if group_name == "" or password == "":
-            return apology("Username and/or Password is missing!")
-        entries = db.execute("SELECT * FROM groups")
-        for entry in entries:
-            if entry["group_name"] == group_name:
-                return apology("Group Name already exists!")
-
-        hashed_password = generate_password_hash(password)
-        db.execute(
-            "INSERT INTO groups (group_name, hash) VALUES (:u, :h)",
-            u=group_name,
-            h=hashed_password,
-        )
-        flash('Group created successfully!')
-    return render_template("create.html")
+    """Create a new group."""
+    # TODO: Implement group creation
+    # GET: Render create group form
+    # POST:
+    #   - Get group_name from form
+    #   - Validate not empty
+    #   - INSERT into groups table
+    #   - INSERT creator into group_users table
+    #   - Set session["group_id"]
+    #   - If ENABLE_EMAIL_NOTIFICATIONS:
+    #     - Log event: track_event('group.created', {...})
+    #   - Redirect to group page
+    pass
 
 
 @app.route("/join", methods=["GET", "POST"])
 @login_required
 def join():
-    if request.method == "GET":
-        return render_template("join.html")
-    else:
-        group_name = request.form.get("group_name")
-        password = request.form.get("password")
-
-        if not group_name:
-            return apology("must provide username", 403)
-
-        # Ensure password was submitted
-        elif not password:
-            return apology("must provide password", 403)
-
-        # Query database for username
-        rows = db.execute(
-            "SELECT * FROM groups WHERE group_name = ?", group_name
-        )
-
-        # Ensure username exists and password is correct
-        if len(rows) != 1 or not check_password_hash(rows[0]["hash"], password):
-            return apology("invalid username and/or password", 403)
-
-        user_id = session["user_id"]
-        group_id = rows[0]["group_id"]
-        session["group_id"] = group_id
-
-        db.execute("INSERT INTO group_users (group_id, user_id) VALUES (:g, :u)", g=group_id, u = user_id)
-        return redirect("/group")
-
+    """Join an existing group."""
+    # TODO: Implement group join with email notification
+    # GET: Render join group form (ask for group code)
+    # POST:
+    #   - Get group_code from form
+    #   - Query groups table to find group_id
+    #   - Validate group exists
+    #   - Check user not already in group
+    #   - Get user_id from session
+    #   - INSERT into group_users table
+    #   - Set session["group_id"] = group_id
+    #   - If ENABLE_EMAIL_NOTIFICATIONS:
+    #     - Call send_join_notification.delay(user_id, group_id)
+    #     - Log event: track_event('notification.queued', {...})
+    #   - Redirect to /group
+    pass
 
 
 @app.route("/group", methods=["GET", "POST"])
 @login_required
 def group():
-    group_id = session["group_id"]
-    row = db.execute("SELECT group_name FROM groups WHERE group_id = ?", group_id)
-    gn = row[0]["group_name"]
-    if request.method == "GET":
-        return render_template("group.html", group_name = gn, expenses_data = get_expenses(group_id))
-    else:
-        desc = request.form.get("expense_name")
-        amount = request.form.get("expense_amount")
-        user_id = session["user_id"]
-        db.execute("INSERT INTO expenses (description, amount, user_id, group_id) VALUES (?, ?, ?, ?)",(desc),(amount),(user_id),(group_id))
-
-        return render_template("group.html", group_name = gn, expenses_data = get_expenses(group_id))
+    """Display group expenses or add new expense."""
+    # TODO: Implement group page with expense addition and email notification
+    # GET:
+    #   - Get group_id from session
+    #   - Query group name
+    #   - Query all expenses in group
+    #   - Render group.html with expenses list
+    # POST:
+    #   - Get expense_name, expense_amount from form
+    #   - Validate inputs (not empty, amount is positive number)
+    #   - If invalid: return apology()
+    #   - Get user_id from session, group_id from session
+    #   - INSERT into expenses table
+    #   - Get expense_id of inserted row
+    #   - If ENABLE_EMAIL_NOTIFICATIONS:
+    #     - Call send_expense_notification.delay(expense_id, group_id)
+    #     - Log event: track_event('notification.queued', {...})
+    #   - Re-render group page with updated expenses
+    pass
 
 
 @app.route("/summary", methods=["GET"])
 @login_required
 def summary():
-    group_id = session["group_id"]
-    expenses = get_expenses(group_id)
-    n=0
-    total=0
-    for user in expenses:
-        n+=1
-        bills = expenses[user]
-        sum = 0
-        for name in bills:
-            sum+=bills[name]
-        expenses[user] = sum
-        total+=sum
+    """Display settlement summary for group."""
+    # TODO: Implement summary with settlement notifications
+    # GET:
+    #   - Get group_id from session
+    #   - Query all expenses in group
+    #   - Query all users in group
+    #   - Calculate net balances for each user
+    #   - Determine settlement transactions needed
+    #   - If ENABLE_EMAIL_NOTIFICATIONS:
+    #     - Call send_settlement_notification.delay(transactions, group_id)
+    #     - Log event: track_event('notification.queued', {...})
+    #   - Render summary.html with transactions
+    # 
+    # Note: Complex calculation logic already exists (lines 154-218 in original)
+    # Preserve existing logic, add notification call at end
+    pass
 
-    levana = {}
-    devana = {}
-    for user in expenses:
-        value = (expenses[user]) - ((total)/n)
-        if (value > 0):
-            levana[user] = value
+
+@app.route("/preferences", methods=["GET", "POST"])
+@login_required
+def preferences():
+    """Display and update user notification preferences."""
+    # TODO: Implement notification preferences UI
+    # GET:
+    #   - Get user_id from session
+    #   - Query user_preferences table for this user
+    #   - Render preferences.html with current settings
+    #       - Checkboxes for: notify_on_join, notify_on_expense, notify_on_settlement
+    #       - Current values pre-filled from database
+    # POST:
+    #   - Get user_id from session
+    #   - Get checkbox values from form (default to False if not submitted)
+    #   - UPDATE user_preferences table
+    #   - Log event: track_event('notification.preference_changed', {...})
+    #   - Flash message: "Preferences updated"
+    #   - Redirect to preferences page
+    pass
+
+
+@app.route("/health/email", methods=["GET"])
+def health_email():
+    """Check email service health."""
+    """
+    Endpoint for monitoring: verify SMTP connectivity.
+    
+    Returns:
+        JSON response with status and service info
+        200: Service healthy
+        503: Service unavailable
+    """
+    try:
+        # TODO: Test email service connectivity
+        # Call email_service.test_connection()
+        # If successful: return {"status": "ok", "service": "email"}, 200
+        # If failed: return {"status": "error", ...}, 503
+        if email_service.test_connection():
+            return {"status": "ok", "service": "email"}, 200
         else:
-            devana[user] = (-1)*value
-
-    levana = dict(sorted(levana.items(), key=lambda item: item[1], reverse=True))
-    devana = dict(sorted(devana.items(), key=lambda item: item[1], reverse=True))
-
-    transactions = []
-
-    while(True):
-        _levana = levana.copy()
-        _devana = devana.copy()
-        if len(levana) == 0:
-            break
-        while(True):
-            c = 0
-            for rich_kid in _levana:
-                for poor_kid in _devana:
-                    try:
-                        if levana[rich_kid] == devana[poor_kid]:
-                            c=1
-                            transactions.append([poor_kid, round(levana[rich_kid],2), rich_kid])
-                            del levana[rich_kid]
-                            del devana[poor_kid]
-                    except:
-                        pass
-
-            while(True):
-                count = 0
-                _levana = levana.copy()
-                _devana = devana.copy()
-                for rich_kid in _levana:
-                    for poor_kid in _devana:
-                        try:
-                            if levana[rich_kid] - devana[poor_kid] in list(devana.values()):
-                                levana[rich_kid] = levana[rich_kid] - devana[poor_kid]
-                                transactions.append([poor_kid, round(devana[poor_kid],2), rich_kid])
-                                del devana[poor_kid]
-                                count = 1
-                                c=1
-                            if devana[poor_kid] - levana[rich_kid] in list(levana.values()):
-                                devana[poor_kid] = devana[poor_kid]- levana[rich_kid]
-                                transactions.append([poor_kid, round(levana[rich_kid],2), rich_kid])
-                                del levana[rich_kid]
-                                count = 1
-                                c=1
-                        except:
-                            pass
-                if count == 0:
-                    break
-            if c == 0:
-                break
-
-        levana = dict(sorted(levana.items(), key=lambda item: item[1], reverse=True))
-        devana = dict(sorted(devana.items(), key=lambda item: item[1], reverse=True))
-        _levana = levana.copy()
-        _devana = devana.copy()
-        for rich_kid in _levana:
-            for poor_kid in _devana:
-                try:
-                    if levana[rich_kid] - devana[poor_kid] > 0:
-                        levana[rich_kid] = levana[rich_kid] - devana[poor_kid]
-                        transactions.append([poor_kid, round(devana[poor_kid],2), rich_kid])
-                        del devana[poor_kid]
-                    else:
-                        devana[poor_kid] = devana[poor_kid]- levana[rich_kid]
-                        transactions.append([poor_kid, round(levana[rich_kid],2), rich_kid])
-                        del levana[rich_kid]
-                except:
-                    pass
-                break
-            break
+            return {"status": "error", "service": "email", "reason": "Connection failed"}, 503
+    except Exception as e:
+        return {"status": "error", "service": "email", "error": str(e)}, 503
 
 
-    return render_template("summary.html",mapping=transactions)
+@app.route("/health", methods=["GET"])
+def health():
+    """Overall system health check."""
+    # TODO: Implement overall health check
+    # Check:
+    #   - Database connectivity
+    #   - Email service (if ENABLE_EMAIL_NOTIFICATIONS)
+    #   - Return comprehensive status
+    pass
 
 
-
-
-
-
-"""Helper function"""
-def get_expenses(id):
-    group_id = id
-
-    rows = db.execute("SELECT user_id FROM group_users WHERE group_id = ?", group_id)
-    group_users_id = []
-    for row in rows:
-        if row["user_id"] not in group_users_id:
-            group_users_id.append(row["user_id"])
-
-    # id: name
-    group_users_name = {}
-    for i in group_users_id:
-        data = db.execute("SELECT username FROM users WHERE user_id = ?", i)
-        group_users_name[i] = data[0]["username"]
-
-    rows = db.execute("SELECT user_id, description, amount FROM expenses WHERE group_id = ?", group_id)
-    expenses = {}
-
-    for row in rows:
-        name = group_users_name[row["user_id"]]
-        if name not in expenses:
-            expenses[name] = {row["description"]:row["amount"]}
-        else:
-            (expenses[name])[row["description"]] = row["amount"]
-
-    return expenses
+if __name__ == "__main__":
+    app.run(debug=os.getenv("FLASK_DEBUG", False))
